@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Image to 1-Bit Dithered Digits</title>
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 15px 0; }
+  label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px; }
+  input, select, button { width: 100%; padding: 8px; box-sizing: border-box; }
+  button { background: #0066cc; color: #fff; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
+  button:hover { background: #004c99; }
+  #downloadBtn { background: #28a745; margin-top: 10px; display: none; }
+  #downloadBtn:hover { background: #1e7e34; }
+  pre {
+    background: #111; color: #0f0; font-family: monospace; font-size: 4px;
+    line-height: 4px; letter-spacing: 0px; overflow: auto; max-height: 400px;
+    padding: 10px; white-space: pre; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h2>Image to 1-Bit Dithered Digits (.txt)</h2>
+
+<input type="file" id="upload" accept="image/*">
+
+<div class="controls">
+  <div>
+    <label>Width (columns):</label>
+    <input type="number" id="width" value="120" min="10" max="1000">
+  </div>
+  <div>
+    <label>Black Pixel Digit:</label>
+    <input type="text" id="blackChar" value="1" maxlength="1">
+  </div>
+  <div>
+    <label>White Pixel Digit:</label>
+    <input type="text" id="whiteChar" value="0" maxlength="1">
+  </div>
+  <div>
+    <label>Aspect Correction:</label>
+    <select id="aspectRatio">
+      <option value="0.5">Yes (0.5 font ratio)</option>
+      <option value="1.0">No (Square 1:1)</option>
+    </select>
+  </div>
+</div>
+
+<button id="downloadBtn">Download .txt File</button>
+<h3>Preview:</h3>
+<pre id="preview">Upload an image to see the output...</pre>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+  const upload = document.getElementById('upload');
+  const preview = document.getElementById('preview');
+  const downloadBtn = document.getElementById('downloadBtn');
+  let generatedText = "";
+  let loadedImage = null;
+
+  upload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      loadedImage = new Image();
+      loadedImage.onload = processImage;
+      loadedImage.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  ['width', 'blackChar', 'whiteChar', 'aspectRatio'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (loadedImage) processImage();
+    });
+  });
+
+  function processImage() {
+    const targetWidth = parseInt(document.getElementById('width').value, 10);
+    const aspectFactor = parseFloat(document.getElementById('aspectRatio').value);
+    const blackChar = document.getElementById('blackChar').value || '1';
+    const whiteChar = document.getElementById('whiteChar').value || '0';
+
+    const targetHeight = Math.floor((loadedImage.height / loadedImage.width) * targetWidth * aspectFactor);
+
+    const canvas = document.getElementById('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Draw and get grayscale buffer
+    ctx.drawImage(loadedImage, 0, 0, targetWidth, targetHeight);
+    const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    const d = imgData.data;
+
+    // Convert to 2D grayscale intensity array
+    const gray = [];
+    for (let y = 0; y < targetHeight; y++) {
+      gray[y] = new Float32Array(targetWidth);
+      for (let x = 0; x < targetWidth; x++) {
+        const idx = (y * targetWidth + x) * 4;
+        // Standard luma formula
+        gray[y][x] = 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
+      }
+    }
+
+    // Floyd-Steinberg 1-Bit Dithering
+    let lines = [];
+    for (let y = 0; y < targetHeight; y++) {
+      let line = "";
+      for (let x = 0; x < targetWidth; x++) {
+        const oldVal = gray[y][x];
+        const newVal = oldVal < 128 ? 0 : 255;
+        line += (newVal === 0) ? blackChar : whiteChar;
+
+        const err = oldVal - newVal;
+        if (x + 1 < targetWidth) gray[y][x + 1] += err * (7 / 16);
+        if (x - 1 >= 0 && y + 1 < targetHeight) gray[y + 1][x - 1] += err * (3 / 16);
+        if (y + 1 < targetHeight) gray[y + 1][x] += err * (5 / 16);
+        if (x + 1 < targetWidth && y + 1 < targetHeight) gray[y + 1][x + 1] += err * (1 / 16);
+      }
+      lines.push(line);
+    }
+
+    generatedText = lines.join('\n');
+    preview.textContent = generatedText;
+    downloadBtn.style.display = 'block';
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    const blob = new Blob([generatedText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dithered_digits.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
