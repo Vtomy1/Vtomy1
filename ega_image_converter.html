@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Image to 4-bit EGA / QBASIC</title>
+<style>
+  :root { color-scheme: dark; --bg:#10151d; --panel:#19222e; --line:#344456; --text:#edf3fa; --muted:#a9bacb; --accent:#6dd6c4; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif }
+  main { max-width:1100px; margin:28px auto; padding:0 18px }
+  h1 { font-size:clamp(1.6rem,4vw,2.4rem); margin:.2em 0 }
+  h2 { font-size:1.15rem; margin:0 0 12px }
+  p,.hint { color:var(--muted) }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; margin:16px 0 }
+  .controls { display:flex; flex-wrap:wrap; align-items:end; gap:12px }
+  label { display:grid; gap:5px; color:var(--muted); font-size:.9rem }
+  input,select,button { font:inherit; color:var(--text); background:#111923; border:1px solid var(--line); border-radius:7px; padding:9px 11px }
+  input[type=number] { width:105px }
+  input[type=file] { max-width:100% }
+  button { cursor:pointer; background:#23443f; border-color:#39786d; font-weight:650 }
+  button:disabled { opacity:.45; cursor:not-allowed }
+  .preview { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px }
+  figure { margin:0; min-width:0 }
+  figure canvas { display:block; width:100%; max-height:440px; object-fit:contain; image-rendering:pixelated; background:#080b10; border:1px solid var(--line); border-radius:6px }
+  figcaption { color:var(--muted); margin-top:6px; font-size:.88rem }
+  .buttons { display:flex; flex-wrap:wrap; gap:9px; margin-top:12px }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#0c1118; border:1px solid var(--line); padding:13px; border-radius:7px; max-height:360px; overflow:auto; font:13px/1.5 ui-monospace,monospace }
+  .palette { display:grid; grid-template-columns:repeat(8,minmax(30px,1fr)); gap:5px; margin-top:12px }
+  .swatch { height:27px; border:1px solid #ffffff55; border-radius:4px; position:relative }
+  .swatch small { position:absolute; right:3px; bottom:0; color:white; text-shadow:0 1px 2px #000; font:10px ui-monospace,monospace }
+  .status { min-height:1.4em; color:var(--accent); margin-top:8px }
+  code { color:#a7e7db }
+</style>
+</head>
+<body>
+<main>
+  <h1>Image → 4-bit EGA</h1>
+  <p>Convert an image to the classic 16-color EGA palette with optional Floyd–Steinberg dithering. Export packed 4-bit pixels or QBASIC <code>DATA</code> statements.</p>
+
+  <section class="panel">
+    <div class="controls">
+      <label>Source image<input id="file" type="file" accept="image/*"></label>
+      <label>Width (pixels)<input id="width" type="number" min="1" max="2048" value="320"></label>
+      <label>Height (pixels)<input id="height" type="number" min="1" max="2048" value="200"></label>
+      <label>Dithering<select id="dither"><option value="fs">Floyd–Steinberg</option><option value="none">None (nearest color)</option></select></label>
+      <button id="convert" disabled>Convert</button>
+    </div>
+    <div class="palette" id="palette" aria-label="EGA palette"></div>
+    <div id="status" class="status" role="status"></div>
+  </section>
+
+  <section class="panel preview">
+    <figure><canvas id="sourceCanvas" width="1" height="1"></canvas><figcaption>Original image</figcaption></figure>
+    <figure><canvas id="resultCanvas" width="1" height="1"></canvas><figcaption id="resultCaption">Converted EGA preview</figcaption></figure>
+  </section>
+
+  <section class="panel">
+    <h2>Export</h2>
+    <p>Binary format: row-major pixels, two pixels per byte, first pixel in the high nibble and second in the low nibble. If the pixel count is odd, the final low nibble is zero.</p>
+    <div class="buttons">
+      <button id="saveRaw" disabled>Download packed .EGA</button>
+      <button id="saveData" disabled>Download QBASIC DATA .BAS</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>QBASIC loader / saver example</h2>
+    <p>Set <code>W</code> and <code>H</code> to the dimensions used for conversion. This example reads/writes the packed <code>.EGA</code> bytes and unpacks each palette index into <code>PIX()</code> (values 0–15).</p>
+    <pre id="basicCode"></pre>
+    <button id="copyCode">Copy QBASIC code</button>
+  </section>
+
+  <section class="panel">
+    <h2>Using the exported DATA file</h2>
+    <p>The optional <code>.BAS</code> export contains one palette index per <code>DATA</code> value (not packed). Read it in the same order shown below:</p>
+    <pre id="dataCode"></pre>
+    <button id="copyDataCode">Copy DATA reader</button>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+  // Classic 16-color EGA RGB palette, indexed 0..15.
+  const EGA = [
+    [0,0,0], [0,0,170], [0,170,0], [0,170,170],
+    [170,0,0], [170,0,170], [170,85,0], [170,170,170],
+    [85,85,85], [85,85,255], [85,255,85], [85,255,255],
+    [255,85,85], [255,85,255], [255,255,85], [255,255,255]
+  ];
+  const $ = id => document.getElementById(id);
+  const fileInput = $('file'), widthInput = $('width'), heightInput = $('height');
+  const sourceCanvas = $('sourceCanvas'), resultCanvas = $('resultCanvas');
+  let sourceImage = null, indices = null, outW = 0, outH = 0;
+  const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently:true });
+  const resultCtx = resultCanvas.getContext('2d', { willReadFrequently:true });
+
+  $('palette').innerHTML = EGA.map((c,i) => `<div class="swatch" title="${i}: rgb(${c.join(', ')})" style="background:rgb(${c.join(',')})"><small>${i.toString(16).toUpperCase()}</small></div>`).join('');
+  $('basicCode').textContent = `' QBASIC / QuickBASIC: packed 4-bit EGA pixel file
+' Pixel order is row-major; first pixel = high nibble.
+DIM SHARED W AS INTEGER, H AS INTEGER
+W = 320: H = 200
+DIM PIX(0 TO W * H - 1) AS INTEGER
+DIM packed AS STRING, b AS INTEGER, i AS LONG, p AS LONG
+
+' Load packed pixels from image.EGA
+OPEN "image.EGA" FOR BINARY AS #1
+packed = SPACE$(LOF(1))
+GET #1, 1, packed
+CLOSE #1
+IF LEN(packed) < (W * H + 1) \\ 2 THEN PRINT "File too short": END
+FOR i = 0 TO W * H - 1 STEP 2
+    b = ASC(MID$(packed, i \\ 2 + 1, 1))
+    PIX(i) = (b AND 240) \\ 16
+    IF i + 1 < W * H THEN PIX(i + 1) = b AND 15
+NEXT i
+
+' ... draw PIX(p) using SCREEN 7 / PSET or another graphics mode ...
+' Example: PSET (x, y), PIX(y * W + x)
+
+' Save packed pixels back to image.EGA
+packed = SPACE$((W * H + 1) \\ 2)
+FOR i = 0 TO W * H - 1 STEP 2
+    b = (PIX(i) AND 15) * 16
+    IF i + 1 < W * H THEN b = b OR (PIX(i + 1) AND 15)
+    MID$(packed, i \\ 2 + 1, 1) = CHR$(b)
+NEXT i
+OPEN "saved.EGA" FOR BINARY AS #1
+PUT #1, 1, packed
+CLOSE #1
+PRINT "Saved saved.EGA"`;
+  $('dataCode').textContent = `' Read the separate .BAS export containing palette indexes as DATA values
+CONST W = 320, H = 200
+DIM PIX(0 TO W * H - 1) AS INTEGER
+FOR p = 0 TO W * H - 1
+    READ PIX(p)       ' each value is an EGA palette index, 0..15
+NEXT p
+' ... DATA lines are emitted by the converter ...
+RESTORE
+DATA 0, 1, 2, 3, 4, 5, 6, 7`;
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      sourceImage = img;
+      sourceCanvas.width = img.naturalWidth; sourceCanvas.height = img.naturalHeight;
+      sourceCtx.clearRect(0,0,sourceCanvas.width,sourceCanvas.height);
+      sourceCtx.drawImage(img,0,0);
+      URL.revokeObjectURL(url);
+      $('convert').disabled = false;
+      $('status').textContent = `Loaded ${file.name} (${img.naturalWidth} × ${img.naturalHeight}).`;
+      convert();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); $('status').textContent = 'Could not decode this image. Try PNG, JPEG, GIF, or WebP.'; };
+    img.src = url;
+  });
+  $('convert').addEventListener('click', convert);
+  $('saveRaw').addEventListener('click', saveRaw);
+  $('saveData').addEventListener('click', saveData);
+  $('copyCode').addEventListener('click', () => copyText($('basicCode').textContent, $('copyCode')));
+  $('copyDataCode').addEventListener('click', () => copyText($('dataCode').textContent, $('copyDataCode')));
+
+  function nearest(r,g,b) {
+    let best = 0, bestD = Infinity;
+    for (let i=0; i<16; i++) {
+      const c = EGA[i], dr=r-c[0], dg=g-c[1], db=b-c[2];
+      // Weighted squared distance approximates human sensitivity.
+      const d = 0.299*dr*dr + 0.587*dg*dg + 0.114*db*db;
+      if (d < bestD) { bestD=d; best=i; }
+    }
+    return best;
+  }
+  function convert() {
+    if (!sourceImage) return;
+    const w = Number.parseInt(widthInput.value,10), h = Number.parseInt(heightInput.value,10);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w<1 || h<1 || w>2048 || h>2048) {
+      $('status').textContent = 'Enter width and height between 1 and 2048.'; return;
+    }
+    outW=w; outH=h;
+    const work = document.createElement('canvas'); work.width=w; work.height=h;
+    const ctx = work.getContext('2d', {willReadFrequently:true});
+    ctx.drawImage(sourceImage,0,0,w,h);
+    const image = ctx.getImageData(0,0,w,h), data=image.data;
+    indices = new Uint8Array(w*h);
+    const dither = $('dither').value === 'fs';
+    for (let y=0; y<h; y++) for (let x=0; x<w; x++) {
+      const p=(y*w+x)*4;
+      const oldR=data[p], oldG=data[p+1], oldB=data[p+2];
+      const ci=nearest(oldR,oldG,oldB), c=EGA[ci];
+      indices[y*w+x]=ci;
+      data[p]=c[0]; data[p+1]=c[1]; data[p+2]=c[2]; data[p+3]=255;
+      if (dither) {
+        const er=oldR-c[0], eg=oldG-c[1], eb=oldB-c[2];
+        spread(x+1,y, 7/16); spread(x-1,y+1,3/16); spread(x,y+1,5/16); spread(x+1,y+1,1/16);
+        function spread(nx,ny,f) {
+          if (nx<0 || nx>=w || ny<0 || ny>=h) return;
+          const q=(ny*w+nx)*4;
+          data[q]=clamp(data[q]+er*f); data[q+1]=clamp(data[q+1]+eg*f); data[q+2]=clamp(data[q+2]+eb*f);
+        }
+      }
+    }
+    resultCanvas.width=w; resultCanvas.height=h;
+    resultCtx.putImageData(image,0,0);
+    $('resultCaption').textContent = `EGA preview — ${w} × ${h}, ${dither ? 'Floyd–Steinberg' : 'no dithering'}`;
+    $('saveRaw').disabled=false; $('saveData').disabled=false;
+    $('status').textContent = `Converted ${w*h} pixels. Palette indexes are 0–15; packed output is ${Math.ceil(w*h/2)} bytes.`;
+  }
+  function clamp(v) { return Math.max(0,Math.min(255,v)); }
+  function pack() {
+    const bytes = new Uint8Array(Math.ceil(indices.length/2));
+    for (let i=0; i<indices.length; i+=2) bytes[i>>1] = (indices[i]<<4) | (i+1<indices.length ? indices[i+1] : 0);
+    return bytes;
+  }
+  function saveRaw() { if (indices) download(new Blob([pack()],{type:'application/octet-stream'}), `${outW}x${outH}.EGA`); }
+  function saveData() {
+    if (!indices) return;
+    const rows=[];
+    for(let i=0;i<indices.length;i+=20) rows.push('DATA '+Array.from(indices.subarray(i,Math.min(i+20,indices.length))).join(', '));
+    const text=`' ${outW} x ${outH} pixels; ${indices.length} palette indexes (0..15)\n${rows.join('\n')}\n`;
+    download(new Blob([text],{type:'text/plain;charset=utf-8'}), `${outW}x${outH}_DATA.BAS`);
+  }
+  function download(blob,name) {
+    const a=document.createElement('a'), url=URL.createObjectURL(blob);
+    a.href=url; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  async function copyText(text,button) {
+    try { await navigator.clipboard.writeText(text); button.textContent='Copied!'; setTimeout(()=>button.textContent=button.id==='copyCode'?'Copy QBASIC code':'Copy DATA reader',1300); }
+    catch { $('status').textContent='Clipboard access was blocked; select and copy the code manually.'; }
+  }
+})();
+</script>
+</body>
+</html>
