@@ -1,0 +1,52 @@
+' =========================================================================
+' SCREEN 11 (640x480 2-COLOR MONOCHROME) BSAVE IMAGE LOADER
+' Target: Microsoft QuickBASIC 4.5 / 7.1 / QBasic / QB64 / DOSBox
+' Image format: 1-bit 640x480 dithered bitmap (38,400 bytes payload)
+' =========================================================================
+
+DEFINT A-Z
+SCREEN 11                   ' 640x480 resolution, 2 colors (Attributes 0 & 1)
+CLS
+
+' 1. Display loading message
+LOCATE 1, 1: PRINT "Loading 640x480 1-bit BSAVE image..."
+
+' 2. Point CPU Segment to VGA Video RAM
+'    VGA Mode 11h video memory starts at segment &HA000, offset 0.
+'    SCREEN 11 is a linear single-bitplane mode (80 bytes per row * 480 rows).
+DEF SEG = &HA000
+
+' 3. Fast Hardware BLOAD: Copies the 38,400 raw bitmap bytes in 1 operation
+'    The 7-byte BSAVE header specifies segment &HA000, offset 0, length 38400.
+BLOAD "IMAGE.BSV", 0
+
+' 4. Restore default BASIC data segment
+DEF SEG
+
+' -------------------------------------------------------------------------
+' OPTIONAL: Hardware DAC Phosphor Palette Tinting
+' VGA DAC registers allow setting any 18-bit RGB color (6 bits per channel: 0..63)
+' -------------------------------------------------------------------------
+' Uncomment ONE of the blocks below to tint your display:
+
+' --- Green Phosphor (IBM 5151 / Apple II P1) ---
+' OUT &H3C8, 1            ' DAC Palette Index 1 (Foreground)
+' OUT &H3C9, 12           ' Red   (0..63)
+' OUT &H3C9, 63           ' Green (max intensity)
+' OUT &H3C9, 12           ' Blue  (0..63)
+
+' --- Amber Phosphor (Warm Amber P3 CRT) ---
+' OUT &H3C8, 1            ' DAC Palette Index 1 (Foreground)
+' OUT &H3C9, 63           ' Red   (63)
+' OUT &H3C9, 42           ' Green (42)
+' OUT &H3C9, 0            ' Blue  (0)
+
+' --- Paper White (High-contrast cool white) ---
+' OUT &H3C8, 1
+' OUT &H3C9, 60: OUT &H3C9, 60: OUT &H3C9, 63
+
+' 5. Wait for keypress before exiting
+WHILE INKEY$ = "": WEND
+SCREEN 0: WIDTH 80: CLS
+PRINT "Image displayed successfully. Exiting."
+END

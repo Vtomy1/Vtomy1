@@ -1,0 +1,45 @@
+' =========================================================================
+' SCREEN 11 (640x480 MONOCHROME) BSAVE SCREEN SAVER
+' Saves active 640x480 screen memory to standard QuickBASIC BSAVE format.
+' Total output file size = 7 bytes header + 38,400 bytes data = 38,407 bytes.
+' =========================================================================
+
+DEFINT A-Z
+SCREEN 11                   ' 640x480 2-color mode
+CLS
+
+' 1. Draw a test graphic on screen
+LINE (0, 0)-(639, 479), 1, B        ' Outer border
+LINE (0, 0)-(639, 479), 1           ' Diagonal 1
+LINE (0, 479)-(639, 0), 1           ' Diagonal 2
+CIRCLE (320, 240), 180, 1          ' Center circle
+
+' Render some test text
+LOCATE 14, 32: PRINT "QBASIC SCREEN 11 BSAVE"
+LOCATE 16, 28: PRINT "Resolution: 640x480 x 1-bit"
+LOCATE 18, 30: PRINT "Press any key to save..."
+
+WHILE INKEY$ = "": WEND
+
+' 2. Point segment to VGA Graphics Buffer
+DEF SEG = &HA000
+
+' 3. BSAVE format parameters:
+'    FileName$: Destination file path
+'    Offset:    0 (start of video RAM)
+'    Length:    38400 (80 bytes per scanline * 480 scanlines)
+'
+'    BSAVE automatically prepends the 7-byte header:
+'    [&HFD, &H00, &HA0, &H00, &H00, &H00, &H96]
+'    (FD=Signature, A000=Segment, 0000=Offset, 9600=38400 bytes)
+BSAVE "SAVED11.BSV", 0, 38400
+
+' 4. Restore BASIC segment
+DEF SEG
+
+LOCATE 20, 26: PRINT "Saved as SAVED11.BSV (38,407 bytes)!"
+LOCATE 22, 33: PRINT "Press key to exit."
+WHILE INKEY$ = "": WEND
+
+SCREEN 0: WIDTH 80: CLS
+END
