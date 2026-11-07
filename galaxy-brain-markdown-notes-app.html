@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Galaxy-Brain Markdown Notes App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.14/codemirror.min.css"
+      integrity="sha512-8fKF1QYHRwVY9UiuDdFb2qg0PAJBtThxl5XVtZwdLD0Lh4DaYJ31vKBaizHfLtF8F1Ud92AzNyRCqD7Ga3zF2g=="
+      crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+:root {
+  --bg: #ffffff;
+  --text: #222222;
+  --accent: #0066cc;
+  --sidebar-bg: #f0f0f0;
+  --sidebar-width: 260px;
+  --transition: 0.15s ease-in-out;
+}
+[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --text: #eeeeee;
+  --accent: #4a90e2;
+  --sidebar-bg: #2b2b2b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,Arial,sans-serif;color:var(--text);background:var(--bg);}
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);border-right:1px solid rgba(0,0,0,.1);display:flex;flex-direction:column}
+#sidebarHeader{display:flex;align-items:center;padding:1rem;margin-bottom:0.5rem;border-bottom:1px solid rgba(0,0,0,.1)}
+#sidebarHeader h2{font-size:1.25rem;font-weight:600;margin-right:auto}
+#addNoteBtn{background:var(--accent);color:#fff;border:none;padding:0.5rem 1rem;border-radius:4px;cursor:pointer}
+#notesList{flex:1;overflow-y:auto}
+.noteItem{display:flex;align-items:center;padding:0.75rem 1rem;cursor:pointer;transition:background var(--transition)}
+.noteItem:hover{background:rgba(0,0,0,.05)}
+.noteItem.active{background:rgba(0,0,0,.1)}
+.noteTitle{flex:1}
+.deleteBtn{background:none;border:none;color:inherit;cursor:pointer;margin-left:0.5rem}
+
+#content{flex:1;display:flex;flex-direction:column}
+#editorContainer{flex:1;position:relative}
+.CodeMirror{height:100%}
+#preview{flex:1;overflow
