@@ -1,0 +1,722 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head><base href="https://d16ilfvy4mv02r.cloudfront.net/workspaces/aXqpueVAzNCceg3gC8YPTJsjxUuNFTiS/daac63ce-21ad-48bd-88b9-994b91a8000b/files/">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NES Waveform Keyboard</title>
+<style>
+  :root{
+    --bg:#0a0c11;
+    --panel:#12161f;
+    --panel2:#1a202b;
+    --line:#2a3240;
+    --txt:#cfd8e3;
+    --dim:#6d7b8d;
+    --green:#5ef2c0;
+    --pink:#ff5ea8;
+    --amber:#ffcc66;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #16202c 0%, rgba(10,12,17,0) 70%),
+      var(--bg);
+    color:var(--txt);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+    display:flex; justify-content:center;
+    padding:18px 14px 40px;
+    min-height:100%;
+    overflow-x:hidden;
+  }
+  .app{width:100%; max-width:1080px}
+
+  header{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px}
+  h1{
+    margin:0; font-size:clamp(15px,2.6vw,24px); letter-spacing:.18em;
+    color:var(--green); text-shadow:0 0 18px rgba(94,242,192,.45);
+    font-weight:700;
+  }
+  .sub{font-size:11px; color:var(--dim); letter-spacing:.12em; padding-bottom:3px}
+
+  .scope-wrap{
+    position:relative; border:1px solid var(--line); border-radius:10px;
+    background:linear-gradient(#0b1116,#070a0e);
+    box-shadow:inset 0 0 40px rgba(94,242,192,.06), 0 12px 30px rgba(0,0,0,.5);
+    overflow:hidden; height:132px;
+  }
+  canvas#scope{display:block; width:100%; height:100%}
+  .scope-tag{
+    position:absolute; top:8px; left:12px; font-size:10px; letter-spacing:.18em;
+    color:rgba(94,242,192,.5); pointer-events:none;
+  }
+  .readout{
+    position:absolute; top:8px; right:12px; font-size:11px; letter-spacing:.12em;
+    color:var(--pink); pointer-events:none; text-shadow:0 0 12px rgba(255,94,168,.5);
+  }
+
+  .controls{
+    display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 16px;
+    align-items:center;
+  }
+  .group{
+    display:flex; align-items:center; gap:6px;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px;
+    padding:6px 8px;
+  }
+  .lbl{font-size:9px; letter-spacing:.16em; color:var(--dim); padding-right:2px}
+  button{
+    font-family:inherit; font-size:11px; letter-spacing:.08em;
+    background:var(--panel2); color:var(--txt);
+    border:1px solid var(--line); border-radius:6px;
+    padding:6px 9px; cursor:pointer; transition:.12s;
+  }
+  button:hover{border-color:#3b4757; color:#fff}
+  button.on{
+    background:rgba(94,242,192,.14); border-color:var(--green); color:var(--green);
+    box-shadow:0 0 14px rgba(94,242,192,.22), inset 0 0 8px rgba(94,242,192,.1);
+  }
+  button.mute.on{
+    background:rgba(255,94,168,.14); border-color:var(--pink); color:var(--pink);
+    box-shadow:0 0 14px rgba(255,94,168,.2);
+  }
+  button:active{transform:translateY(1px)}
+  #oct{min-width:16px; text-align:center; color:var(--amber); font-size:12px}
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:96px; height:4px; border-radius:3px;
+    background:#2a3240; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--green); cursor:pointer; box-shadow:0 0 10px rgba(94,242,192,.6);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px;height:13px;border:0;border-radius:50%;background:var(--green);cursor:pointer;
+  }
+
+  .keys{display:flex; flex-direction:column; gap:8px; user-select:none}
+  .row{display:flex; gap:5px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px}
+  .key{
+    position:relative; flex:1 1 0; min-width:30px; height:76px;
+    border:1px solid #2e3745; border-radius:7px;
+    background:linear-gradient(#1e2733,#141a23);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:5px; cursor:pointer; touch-action:none;
+    transition:background .06s, box-shadow .06s, transform .06s;
+  }
+.successor{}
+  .key b{font-size:12px; color:#dbe6f3; font-weight:600}
+  .key i{font-size:9px; color:var(--dim); font-style:normal; letter-spacing:.04em}
+  .key.black{background:linear-gradient(#151b24,#0c1016); border-color:#232b37}
+  .key.black b{color:#93a3b7}
+  .key.hit{
+    background:linear-gradient(#2affc0,#12b98c); border-color:#8bffdb;
+    box-shadow:0 0 26px rgba(94,242,192,.55); transform:translateY(1px);
+  }
+  .key.hit b,.key.hit i{color:#06231b}
+  .key.noise{
+    flex:.6 1 0; min-width:64px;
+    background:linear-gradient(#2a1b26,#180f18); border-color:#3d2636;
+  }
+  .key.noise b{color:var(--pink)}
+  .key.noise.hit{background:linear-gradient(#ff7ab5,#c93f7e); border-color:#ffb3d4; box-shadow:0 0 26px rgba(255,94,168,.5)}
+
+  footer{
+    margin-top:16px; font-size:10.5px; color:var(--dim); line-height:1.9; letter-spacing:.04em;
+  }
+  footer kbd{
+    background:var(--panel2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:4px; padding:1px 5px; font-family:inherit; color:#9fb0c4; font-size:10px;
+  }
+  @media (max-width:640px){
+    .key{height:64px; min-width:26px}
+    .key b{font-size:11px}
+    .key i{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>NES WAVEFORM KEYBOARD</h1>
+    <div class="sub">2A03-style &middot; 2×PULSE / TRIANGLE / LFSR NOISE</div>
+  </header>
+
+  <div class="scope-wrap">
+    <canvas id="scope"></canvas>
+    <div class="scope-tag">OUTPUT</div>
+    <div class="readout" id="readout">--</div>
+  </div>
+
+  <section class="controls">
+    <div class="group">
+      <span class="lbl">OCT</span>
+      <button data-oct="-1" aria-label="octave down">&#8722;</button>
+      <span id="oct">4</span>
+      <button data-oct="1" aria-label="octave up">+</button>
+    </div>
+
+    <div class="group">
+      <span class="lbl">DUTY</span>
+      <button data-duty="0.125">12.5</button>
+      <button data-duty="0.25">25</button>
+      <button data-duty="0.5" class="on">50</button>
+      <button data-duty="0.75">75</button>
+    </div>
+
+    <div class="group">
+      <span class="lbl">CH</span>
+      <button data-mute="p1" class="mute on">P1</button>
+      <button data-mute="p2" class="mute on">P2</button>
+      <button data-mute="tri" class="mute on">TRI</button>
+      <button data-mute="noise" class="mute on">NOI</button>
+    </div>
+
+    <div class="group">
+      <span class="lbl">FX</span>
+      <button id="arpBtn">ARP</button>
+      <button id="vibBtn" class="on">VIB</button>
+      <button id="quantBtn" class="on">4-BIT</button>
+    </div>
+
+    <div class="group">
+      <span class="lbl">VOL</span>
+      <input id="vol" type="range" min="0" max="1" step="0.01" value="0.75">
+    </div>
+  </section>
+
+  <section class="keys" id="keys"></section>
+
+  <footer>
+    PLAY: <kbd>Z S X D C V G B H N J M</kbd> lower octave &nbsp;&middot;&nbsp;
+    <kbd>Q 2 W 3 E R 5 T 6 Y 7 U</kbd> upper octave &nbsp;&middot;&nbsp;
+    <kbd>Space</kbd> noise hit &nbsp;&middot;&nbsp;
+    <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> octave &nbsp;&middot;&nbsp;
+    <kbd>Esc</kbd> all off<br>
+    Hold several keys for chords or turn on <b>ARP</b> to trill them at NES speed.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------------------------------------------------- state ---- */
+  const state = {
+    octave: 4,
+    duty: 0.5,
+    arp: false,
+    vib: true,
+    quant: true,
+    volume: 0.75,
+    muted: { p1:false, p2:false, tri:false, noise:false },
+    held: []
+  };
+
+  let ctx = null;
+  let N = null;              // audio nodes
+  let arpStep = 0;
+  let arpTimer = null;
+
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  function noteName(m){ return NOTE_NAMES[((m%12)+12)%12] + (Math.floor(m/12)-1); }
+  function mtof(m){ return 440 * Math.pow(2, (m-69)/12); }
+
+  /* ------------------------------------------------------ waveforms ---- */
+  // Pulse wave with variable duty, built from its Fourier series.
+  function pulseWave(duty){
+    const H = 64;
+    const real = new Float32Array(H+1);
+    const imag = new Float32Array(H+1);
+    for(let n=1;n<=H;n++){
+      real[n] = (2/(n*Math.PI)) * Math.sin(2*Math.PI*n*duty);
+      imag[n] = (2/(n*Math.PI)) * (1 - Math.cos(2*Math.PI*n*duty));
+    }
+    return ctx.createPeriodicWave(real, imag, { disableNormalization:true });
+  }
+
+  // The NES triangle is a 32-step, 4-bit stair, not a smooth triangle.
+  function nesTriangleWave(){
+    const steps = 32, H = 48;
+    const x = new Float32Array(steps);
+    for(let i=0;i<steps;i++){
+      const v = i < 16 ? (15 - i) : (i - 16);   // 15..0,0..15
+      x[i] = (v - 7.5) / 7.5;
+    }
+    const real = new Float32Array(H+1);
+    const imag = new Float32Array(H+1);
+    for(let k=1;k<=H;k++){
+      let a = 0, b = 0;
+      for(let i=0;i<steps;i++){
+        const ang = 2*Math.PI*k*i/steps;
+        a += x[i]*Math.cos(ang);
+        b += x[i]*Math.sin(ang);
+      }
+      real[k] = (2/steps)*a;
+      imag[k] = (2/steps)*b;
+    }
+    return ctx.createPeriodicWave(real, imag, { disableNormalization:true });
+  }
+
+  // 15-bit LFSR, the noise generator's actual shift register.
+  function makeNoiseBuffer(){
+    const len = Math.floor(ctx.sampleRate);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    let reg = 1;
+    for(let i=0;i<len;i++){
+      const bit = (reg & 1) ^ ((reg >> 1) & 1);
+      reg = (reg >> 1) | (bit << 14);
+      d[i] = (reg & 1) ? 1 : -1;
+    }
+    return buf;
+  }
+
+  /* --------------------------------------------------------- audio ---- */
+  function initAudio(){
+    if(ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+
+    const master = ctx.createGain();
+    master.gain.value = state.volume;
+
+    const shaper = ctx.createWaveShaper();
+    shaper.oversample = 'none';
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.knee.value = 10;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.18;
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.7;
+
+    master.connect(shaper);
+    shaper.connect(comp);
+    comp.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    // vibrato LFO (cents), routed into each oscillator's detune
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 6;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = state.vib ? 18 : 0;
+    lfo.connect(lfoGain);
+    lfo.start();
+
+    function makeChannel(kind, level){
+      const env = ctx.createGain();
+      env.gain.value = 0.0001;
+      const out = ctx.createGain();
+      out.gain.value = state.muted[kind] ? 1 : 0;   // start open unless muted
+      env.connect(out);
+      out.connect(master);
+      return { kind, env, out, level, active:false };
+    }
+
+    const p1 = makeChannel('p1', 0.17);
+    p1.osc = ctx.createOscillator();
+    p1.osc.setPeriodicWave(pulseWave(state.duty));
+    p1.osc.connect(p1.env);
+    p1.osc.start();
+    lfoGain.connect(p1.osc.detune);
+
+    const p2 = makeChannel('p2', 0.13);
+    p2.osc = ctx.createOscillator();
+    p2.osc.setPeriodicWave(pulseWave(state.duty));
+    p2.osc.connect(p2.env);
+    p2.osc.start();
+    lfoGain.connect(p2.osc.detune);
+
+    const tri = makeChannel('tri', 0.34);
+    tri.osc = ctx.createOscillator();
+    tri.osc.setPeriodicWave(nesTriangleWave());
+    tri.osc.connect(tri.env);
+    tri.osc.start();
+    lfoGain.connect(tri.osc.detune);
+
+    const noise = makeChannel('noise', 0.20);
+    noise.src = ctx.createBufferSource();
+    noise.src.buffer = makeNoiseBuffer();
+    noise.src.loop = true;
+    noise.src.playbackRate.value = 1;
+    noise.src.connect(noise.env);
+    noise.src.start();
+    noise.lastTrigger = 0;
+
+    N = { master, shaper, comp, analyser, p1, p2, tri, noise, lfo, lfoGain };
+    applyQuantizer();
+    kickArp();
+  }
+
+  function applyQuantizer(){
+    if(!N) return;
+    const SH = 2048;
+    const curve = new Float32Array(SH);
+    if(state.quant){
+      for(let i=0;i<SH;i++){
+        const x = -1 + 2*i/(SH-1);
+        curve[i] = Math.round(x*7.5)/7.5;      // 16 steps, like the 2A03's volume DAC
+      }
+    } else {
+      for(let i=0;i<SH;i++) curve[i] = -1 + 2*i/(SH-1);
+    }
+    N.shaper.curve = curve;
+  }
+
+  /* ------------------------------------------------------ envelopes ---- */
+  function gateOn(ch, freq){
+    const t = ctx.currentTime;
+    const g = ch.env.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(Math.max(g.value, 0.0001), t);
+    g.linearRampToValueAtTime(ch.level, t + 0.004);
+    g.setTargetAtTime(ch.level * 0.72, t + 0.014, 0.10);
+    ch.osc.frequency.setTargetAtTime(freq, t, 0.003);
+    ch.active = true;
+  }
+
+  function gateOff(ch){
+    if(!ch.active) return;
+    const t = ctx.currentTime;
+    const g = ch.env.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(Math.max(g.value, 0.0001), t);
+    g.setTargetAtTime(0.0001, t, 0.016);
+    ch.active = false;
+  }
+
+  function retune(ch, freq){
+    ch.osc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.002);
+  }
+
+  function updateVoices(){
+    if(!N) return;
+    const notes = state.held.slice().sort((a,b)=>a-b);
+
+    if(!notes.length){
+      gateOff(N.p1); gateOff(N.p2); gateOff(N.tri);
+      updateReadout();
+      return;
+    }
+
+    const step = state.arp ? arpStep : 0;
+    const n1 = notes[step % notes.length];
+    const n2 = notes[(step + 1) % notes.length];
+    const nTri = notes[0] - 12;
+
+    const f1 = mtof(n1);
+    const f2 = mtof(n2);
+    const f3 = mtof(nTri);
+
+    if(!N.p1.active) gateOn(N.p1, f1); else retune(N.p1, f1);
+    if(!N.p2.active) gateOn(N.p2, f2); else retune(N.p2, f2);
+    if(!N.tri.active) gateOn(N.tri, f3); else retune(N.tri, f3);
+
+    // unison thickening when both pulses land on the same note
+    const det = (n1 === n2) ? 7 : 0;
+    N.p2.osc.detune.setTargetAtTime(det, ctx.currentTime, 0.02);
+
+    updateReadout(notes, step);
+  }
+
+  function noiseHit(rate){
+    if(!N) return;
+    const ch = N.noise;
+    const t = ctx.currentTime;
+    if(t - ch.lastTrigger < 0.03) return;
+    ch.lastTrigger = t;
+    ch.src.playbackRate.setValueAtTime(rate, t);
+    const g = ch.env.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(0.0001, t);
+    g.linearRampToValueAtTime(ch.level, t + 0.002);
+    g.setTargetAtTime(0.0001, t + 0.03, 0.07);
+  }
+
+  function updateReadout(notes, step){
+    const el = document.getElementById('readout');
+    if(!el) return;
+    if(!notes || !notes.length){ el.textContent = '--'; return; }
+    const order = state.arp ? notes.slice(step % notes.length).concat(notes.slice(0, step % notes.length)) : notes;
+    el.textContent = order.map(noteName).join(' ');
+  }
+
+  /* -------------------------------------------------------- keyboard ---- */
+  const LAYOUT = [
+    { row: 1, keys: [
+      ['KeyQ', 0,'Q'], ['Digit2', 1,'2'], ['KeyW', 2,'W'], ['Digit3', 3,'3'], ['KeyE', 4,'E'],
+      ['KeyR', 5,'R'], ['Digit5', 6,'5'], ['KeyT', 7,'T'], ['Digit6', 8,'6'], ['KeyY', 9,'Y'],
+      ['Digit7',10,'7'], ['KeyU',11,'U'], ['KeyI',12,'I'], ['Digit9',13,'9'], ['KeyO',14,'O'],
+      ['Digit0',15,'0'], ['KeyP',16,'P']
+    ]},
+    { row: 2, keys: [
+      ['KeyZ',-12,'Z'], ['KeyS',-11,'S'], ['KeyX',-10,'X'], ['KeyD', -9,'D'], ['KeyC', -8,'C'],
+      ['KeyV', -7,'V'], ['KeyG', -6,'G'], ['KeyB', -5,'B'], ['KeyH', -4,'H'], ['KeyN', -3,'N'],
+      ['KeyJ', -2,'J'], ['KeyM', -1,'M']
+    ]}
+  ];
+
+  const SEMI = {};
+  LAYOUT.forEach(r => r.keys.forEach(k => SEMI[k[0]] = k[1]));
+
+  const keyEls = new Map();
+  function buildKeys(){
+    const host = document.getElementById('keys');
+    host.innerHTML = '';
+    LAYOUT.forEach(rowDef => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      rowDef.keys.forEach(([code, off, label]) => {
+        const b = document.createElement('button');
+        const black = [1,3,6,8,10].includes(((off % 12) + 12) % 12);
+        b.className = 'key' + (black ? ' black' : '');
+        b.dataset.code = code;
+        b.innerHTML = '<b>' + label + '</b><i></i>';
+        b.querySelector('i').textContent = noteName(12*(state.octave+1) + off);
+        b.addEventListener('pointerdown', ev => {
+          ev.preventDefault();
+          b.setPointerCapture && b.setPointerCapture(ev.pointerId);
+          press(code);
+        });
+        b.addEventListener('pointerup', ev => { ev.preventDefault(); release(code); });
+        b.addEventListener('pointercancel', () => release(code));
+        b.addEventListener('lostpointercapture', () => release(code));
+        row.appendChild(b);
+        keyEls.set(code, b);
+      });
+      if(rowDef.row === 2){
+        const nb = document.createElement('button');
+        nb.className = 'key noise';
+        nb.dataset.code = 'Space';
+        nb.innerHTML = '<b>NOISE</b><i>space</i>';
+        nb.addEventListener('pointerdown', ev => { ev.preventDefault(); press('Space'); });
+        nb.addEventListener('pointerup', ev => { ev.preventDefault(); release('Space'); });
+        nb.addEventListener('pointercancel', () => release('Space'));
+        row.appendChild(nb);
+        keyEls.set('Space', nb);
+      }
+      host.appendChild(row);
+    });
+  }
+
+  function refreshKeyLabels(){
+    keyEls.forEach((el, code) => {
+      if(code === 'Space' || !(code in SEMI)) return;
+      el.querySelector('i').textContent = noteName(12*(state.octave+1) + SEMI[code]);
+    });
+  }
+
+  function press(code){
+    initAudio();
+    if(ctx.state === 'suspended') ctx.resume();
+
+    if(code === 'Space'){
+      noiseHit(Math.pow(2, (state.octave - 4)) * 1.0);
+      const el = keyEls.get('Space');
+      if(el){ el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 110); }
+      return;
+    }
+    if(!(code in SEMI)) return;
+
+    const midi = 12*(state.octave+1) + SEMI[code];
+    if(state.held.indexOf(midi) !== -1) return;
+    state.held.push(midi);
+    const el = keyEls.get(code);
+    if(el) el.classList.add('hit');
+    updateVoices();
+  }
+
+  function release(code){
+    if(!(code in SEMI)) return;
+    const midi = 12*(state.octave+1) + SEMI[code];
+    const i = state.held.indexOf(midi);
+    if(i !== -1) state.held.splice(i, 1);
+    const el = keyEls.get(code);
+    if(el) el.classList.remove('hit');
+    updateVoices();
+  }
+
+  function releaseAll(){
+    state.held = [];
+    keyEls.forEach(el => el.classList.remove('hit'));
+    if(N){ gateOff(N.p1); gateOff(N.p2); gateOff(N.tri); }
+    updateReadout();
+  }
+
+  /* ----------------------------------------------------------- arp ---- */
+  function kickArp(){
+    if(arpTimer){ clearInterval(arpTimer); arpTimer = null; }
+    if(state.arp){
+      arpTimer = setInterval(() => {
+        if(!state.held.length) return;
+        arpStep = (arpStep + 1) % 8;
+        updateVoices();
+      }, 55);
+    } else {
+      arpStep = 0;
+    }
+  }
+
+  /* --------------------------------------------------------- scope ---- */
+  const canvas = document.getElementById('scope');
+  const c2d = canvas.getContext('2d');
+  let waveBuf = null;
+  let dpr = 1;
+
+  function sizeCanvas(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(r.width * dpr));
+    canvas.height = Math.max(1, Math.floor(r.height * dpr));
+  }
+  window.addEventListener('resize', sizeCanvas);
+
+  function draw(){
+    requestAnimationFrame(draw);
+    const w = canvas.width, h = canvas.height;
+    if(!w || !h) return;
+
+    c2d.clearRect(0, 0, w, h);
+
+    // grid
+    c2d.strokeStyle = 'rgba(94,242,192,0.07)';
+    c2d.lineWidth = 1;
+    for(let x=0;x<w;x+=w/16){ c2d.beginPath(); c2d.moveTo(x,0); c2d.lineTo(x,h); c2d.stroke(); }
+    for(let y=0;y<h;y+=h/6){ c2d.beginPath(); c2d.moveTo(0,y); c2d.lineTo(w,y); c2d.stroke(); }
+
+    if(!N || !N.analyser){ return; }
+    if(!waveBuf || waveBuf.length !== N.analyser.fftSize){
+      waveBuf = new Float32Array(N.analyser.fftSize);
+    }
+    N.analyser.getFloatTimeDomainData(waveBuf);
+
+    c2d.lineWidth = Math.max(1.4, dpr);
+    c2d.strokeStyle = '#5ef2c0';
+    c2d.shadowColor = 'rgba(94,242,192,0.85)';
+    c2d.shadowBlur = 8 * dpr;
+    c2d.beginPath();
+
+    const mid = h/2;
+    const amp = h*0.42;
+    const step = w / waveBuf.length;
+    for(let i=0;i<waveBuf.length;i++){
+      const x = i*step;
+      const y = mid - Math.max(-1, Math.min(1, waveBuf[i])) * amp;
+      if(i === 0) c2d.moveTo(x, y); else c2d.lineTo(x, y);
+    }
+    c2d.stroke();
+    c2d.shadowBlur = 0;
+  }
+
+  /* ------------------------------------------------------- controls ---- */
+  function setActive(btn, on){ btn.classList.toggle('on', on); }
+
+  document.querySelectorAll('[data-oct]').forEach(b => {
+    b.addEventListener('click', () => {
+      const d = parseInt(b.dataset.oct, 10);
+      state.octave = Math.max(1, Math.min(6, state.octave + d));
+      document.getElementById('oct').textContent = state.octave;
+      refreshKeyLabels();
+      releaseAll();
+    });
+  });
+
+  document.querySelectorAll('[data-duty]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.duty = parseFloat(b.dataset.duty);
+      document.querySelectorAll('[data-duty]').forEach(o => setActive(o, o === b));
+      if(N){ const w = pulseWave(state.duty); N.p1.osc.setPeriodicWave(w); N.p2.osc.setPeriodicWave(w); }
+    });
+  });
+
+  document.querySelectorAll('[data-mute]').forEach(b => {
+    b.addEventListener('click', () => {
+      const k = b.dataset.mute;
+      state.muted[k] = !state.muted[k];
+      setActive(b, !state.muted[k]);
+      if(N){
+        const ch = N[k];
+        ch.out.gain.setTargetAtTime(state.muted[k] ? 0 : 1, ctx.currentTime, 0.008);
+      }
+    });
+  });
+
+  document.getElementById('arpBtn').addEventListener('click', function(){
+    state.arp = !state.arp;
+    setActive(this, state.arp);
+    kickArp();
+    updateVoices();
+  });
+
+  document.getElementById('vibBtn').addEventListener('click', function(){
+    state.vib = !state.vib;
+    setActive(this, state.vib);
+    if(N) N.lfoGain.gain.setTargetAtTime(state.vib ? 18 : 0, ctx.currentTime, 0.03);
+  });
+
+  document.getElementById('quantBtn').addEventListener('click', function(){
+    state.quant = !state.quant;
+    setActive(this, state.quant);
+    applyQuantizer();
+  });
+
+  document.getElementById('vol').addEventListener('input', function(){
+    state.volume = parseFloat(this.value);
+    if(N) N.master.gain.setTargetAtTime(state.volume, ctx.currentTime, 0.02);
+  });
+
+  /* ---------------------------------------------------- key handling ---- */
+  const CODE_ALIAS = { Space:'Space', NumpadEnter:'Enter' };
+
+  window.addEventListener('keydown', e => {
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    const code = e.code;
+
+    if(code === 'ArrowUp' || code === 'ArrowDown'){
+      e.preventDefault();
+      state.octave = Math.max(1, Math.min(6, state.octave + (code === 'ArrowUp' ? 1 : -1)));
+      document.getElementById('oct').textContent = state.octave;
+      refreshKeyLabels();
+      releaseAll();
+      return;
+    }
+    if(code === 'Escape'){ releaseAll(); return; }
+
+    const mapped = (code in SEMI) || CODE_ALIAS[code];
+    if(!mapped) return;
+    e.preventDefault();
+    if(e.repeat) return;
+    press(code);
+  });
+
+  window.addEventListener('keyup', e => {
+    const code = e.code;
+    if((code in SEMI) || CODE_ALIAS[code]){
+      e.preventDefault();
+      release(code);
+    }
+  });
+
+  window.addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', () => { if(document.hidden) releaseAll(); });
+
+  // first gesture unlocks audio on mobile
+  document.addEventListener('pointerdown', () => {
+    if(ctx && ctx.state === 'suspended') ctx.resume();
+  }, { passive:true });
+
+  /* ------------------------------------------------------------ boot ---- */
+  buildKeys();
+  sizeCanvas();
+  draw();
+})();
+</script>
+</body>
+</html>
