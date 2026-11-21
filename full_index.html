@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mnemo | The Memory Challenge</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #ec4899;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Layout Sections */
+        section {
+            padding: 80px 20px;
+            max-width: 1100px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 8vw, 4rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* Game Container */
+        .game-wrapper {
+            background: var(--surface);
+            padding: 30px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: inline-block;
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 25px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            gap: 20px;
+        }
+
+        .stat-item {
+            background: var(--bg);
+            padding: 8px 16px;
+            border-radius: 100px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            perspective: 1000px;
+        }
+
+        .card {
+            width: 70px;
+            height: 70px;
+            cursor: pointer;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .card-front {
+            background: var(--primary);
+            color: white;
+            transform: rotateY(0deg);
+        }
+
+        .card-back {
+            background: var(--surface);
+            color: var(--primary);
+            transform: rotateY(180deg);
+            border: 3px solid var(--primary);
+        }
+
+        .controls {
+            margin-top: 30px;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        #win-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            padding: 40px;
+            border-radius: var(--radius);
+            text-align: center;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @media (max-width: 480px) {
+            .grid { grid-template-columns: repeat(3, 1fr); }
+            .card { width: 60px; height: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <section class="hero">
+        <h1>Mnemo</h1>
+        <p class="subtitle">Challenge your cognitive agility with the ultimate pattern recognition test.</p>
+        
+        <div class="game-wrapper">
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Time: <span id="timer">0</span>s
+                </div>
+                <div class="stat-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.29L22 9.27l-5 4.87 1.18 6.88L12 17l-3.82 3.11L2 14.14l5-4.87L12 2z"/></svg>
+                    Score: <span id="score">0</span>
+                </div>
+                <div class="stat-item">
+                    <svg width="16" height="16" viewBox="0 0 2424" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.29L22 9.27l-5 4.87 1.18 6.88L12 17l-3.82 3.11L2 14.14l5-4.87L12 2z"/></svg>
+                    Best: <span id="best">0</span>
+                </div>
+            </div>
+            <div class="grid" id="game-grid"></div>
+            <div class="controls">
+                <button class="btn" id="restart-btn">Restart Game</button>
+            </div>
+        </div>
+    </section>
+
+    <div id="win-modal">
+        <div class="modal-content">
+            <h2 style="font-size: 2rem; margin-bottom: 10px;">Perfect Match!</h2>
+            <p class="subtitle" style="margin-bottom: 20px;">You've cleared the board with impressive speed.</p>
+            <div class="stats-bar" style="margin-bottom: 30px;">
+                <div class="stat-item">Time: <span id="final-time">0</span>s</div>
+                <div class="stat-item">Score: <span id="final-score">0</span></div>
+            </div>
+            <button class="btn" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const symbols = ['⚡', '🌟', '💎', '🍎', '🍀', '🔥', '🌙', '🎈'];
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let score = 0;
+        let timer = 0;
+        let timerId = null;
+        let bestScore = localStorage.getItem('mnemo-best') || 0;
+
+        const gridEl = document.getElementById('game-grid');
+        const timerEl = document.getElementById('timer');
+        const scoreEl = document.getElementById('score');
+        const bestEl = document.getElementById('best');
+        const winModal = document.getElementById('win-modal');
+
+        bestEl.textContent = bestScore;
+
+        function initGame() {
+            const deck = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+            gridEl.innerHTML = '';
+            flippedCards = [];
+            matchedPairs = 0;
+            score = 0;
+            timer = 0;
+            scoreEl.textContent = score;
+            timerEl.textContent = timer;
+            clearInterval(timerId);
+            
+            timerId = setInterval(() => {
+                timer++;
+                timerEl.textContent = timer;
+            }, 1000);
+
+            deck.forEach((symbol, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.symbol = symbol;
+                card.innerHTML = `
+                    <div class="card-face card-front"></div>
+                    <div class="card-face card-back">${symbol}</div>
+                `;
+                card.addEventListener('click', () => flipCard(card));
+                gridEl.appendChild(card);
+            });
+        }
+
+        function flipCard(card) {
+            if (flippedCards.length === 2 || card.classList.contains('flipped')) return;
+
+            card.classList.add('flipped');
+            flippedCards.push(card);
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            const isMatch = card1.dataset.symbol === card2.dataset.symbol;
+
+            if (isMatch) {
+                score += 10;
+                matchedPairs++;
+                flippedCards = [];
+                scoreEl.textContent = score;
+                if (matchedPairs === symbols.length) handleWin();
+            } else {
+                setTimeout(() => {
+                    card1.classList.remove('flipped');
+                    card2.classList.remove('flipped');
+                    flippedCards = [];
+                }, 1000);
+            }
+        }
+
+        function handleWin() {
+            clearInterval(timerId);
+            document.getElementById('final-time').textContent = timer;
+            document.getElementById('final-score').textContent = score;
+            winModal.style.display = 'flex';
+            
+            if (score > bestScore) {
+                localStorage.setItem('mnemo-best', score);
+                bestEl.textContent = score;
+            }
+        }
+
+        document.getElementById('restart-btn').addEventListener('click', initGame);
+        
+        initGame();
+    </script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3-Bit Image to Digits Converter with Dithering</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    h1 { margin-top: 0; font-size: 1.5rem; color: #38bdf8; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 4px; }
+    select, input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 0.9rem; box-sizing: border-box; }
+    .dropzone { border: 2px dashed #475569; border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: 0.2s; margin-bottom: 20px; }
+    .dropzone:hover { border-color: #38bdf8; background: #1e293b80; }
+    .previews { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+    .preview-box { flex: 1; min-width: 250px; background: #0f172a; border-radius: 8px; padding: 12px; }
+    .preview-box h3 { margin: 0 0 8px; font-size: 0.95rem; color: #cbd5e1; }
+    canvas { max-width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; background: #000; }
+    textarea { width: 100%; height: 160px; font-family: monospace; font-size: 11px; line-height: 1.1; background: #090d16; color: #a5f3fc; border: 1px solid #334155; border-radius: 6px; padding: 10px; box-sizing: border-box; resize: vertical; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; text-decoration: none; }
+    .btn:hover { background: #0369a1; }
+    .btn:disabled { background: #475569; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Image to Digits (3-Bit Palette Dithering)</h1>
+
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <p style="margin: 0;">Drag & drop an image here, or <strong>browse file</strong></p>
+    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+  </div>
+
+  <div class="controls">
+    <div>
+      <label>Max Output Width (px)</label>
+      <input type="number" id="maxWidth" value="96" min="8" max="512">
+    </div>
+    <div>
+      <label>3-Bit Palette Type</label>
+      <select id="paletteType">
+        <option value="rgb">3-bit RGB (8 Colors: 0 to 7)</option>
+        <option value="grayscale">3-bit Grayscale (8 Shades: 0 to 7)</option>
+      </select>
+    </div>
+    <div>
+      <label>Dithering Algorithm</label>
+      <select id="ditherAlgo">
+        <option value="floyd">Floyd-Steinberg Error Diffusion</option>
+        <option value="bayer">Bayer 4x4 Ordered Dithering</option>
+        <option value="none">None (Threshold / Nearest)</option>
+      </select>
+    </div>
+    <div>
+      <label>Text Spacing</label>
+      <select id="spacing">
+        <option value="compact">Compact (No spaces)</option>
+        <option value="spaced">Space separated</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="previews">
+    <div class="preview-box">
+      <h3>Original (Resized)</h3>
+      <canvas id="canvasOriginal"></canvas>
+    </div>
+    <div class="preview-box">
+      <h3>Dithered 3-Bit Preview</h3>
+      <canvas id="canvasDithered"></canvas>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+    <h3 style="margin: 0; font-size: 0.95rem;">Exported Digits Preview</h3>
+    <button class="btn" id="downloadBtn" disabled>Download Digits as .txt</button>
+  </div>
+  <textarea id="outputTxt" readonly placeholder="Digits matrix will appear here..."></textarea>
+</div>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const maxWidthInput = document.getElementById('maxWidth');
+  const paletteTypeInput = document.getElementById('paletteType');
+  const ditherAlgoInput = document.getElementById('ditherAlgo');
+  const spacingInput = document.getElementById('spacing');
+  const canvasOriginal = document.getElementById('canvasOriginal');
+  const canvasDithered = document.getElementById('canvasDithered');
+  const outputTxt = document.getElementById('outputTxt');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  let loadedImg = null;
+  let digitsTextResult = "";
+
+  const RGB_PALETTE = [
+    [0, 0, 0],       // 0: Black
+    [0, 0, 255],     // 1: Blue
+    [0, 255, 0],     // 2: Green
+    [0, 255, 255],   // 3: Cyan
+    [255, 0, 0],     // 4: Red
+    [255, 0, 255],   // 5: Magenta
+    [255, 255, 0],   // 6: Yellow
+    [255, 255, 255]  // 7: White
+  ];
+
+  const GRAY_PALETTE = [
+    [0, 0, 0], [36, 36, 36], [73, 73, 73], [109, 109, 109],
+    [146, 146, 146], [182, 182, 182], [219, 219, 219], [255, 255, 255]
+  ];
+
+  const BAYER_4X4 = [
+    [ 0/16,  8/16,  2/16, 10/16],
+    [12/16,  4/16, 14/16,  6/16],
+    [ 3/16, 11/16,  1/16,  9/16],
+    [15/16,  7/16, 13/16,  5/16]
+  ];
+
+  function findClosestIndex(r, g, b, palette) {
+    let minDist = Infinity;
+    let bestIdx = 0;
+    for (let i = 0; i < palette.length; i++) {
+      const pr = palette[i][0], pg = palette[i][1], pb = palette[i][2];
+      const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+      if (dist < minDist) {
+        minDist = dist;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
+  }
+
+  function processImage() {
+    if (!loadedImg) return;
+
+    const maxWidth = parseInt(maxWidthInput.value, 10) || 96;
+    let width = loadedImg.width;
+    let height = loadedImg.height;
+
+    if (width > maxWidth) {
+      height = Math.round((height * maxWidth) / width);
+      width = maxWidth;
+    }
+
+    canvasOriginal.width = width;
+    canvasOriginal.height = height;
+    canvasDithered.width = width;
+    canvasDithered.height = height;
+
+    const ctxOrig = canvasOriginal.getContext('2d');
+    ctxOrig.drawImage(loadedImg, 0, 0, width, height);
+    const imgData = ctxOrig.getImageData(0, 0, width, height);
+
+    const isGray = paletteTypeInput.value === 'grayscale';
+    const palette = isGray ? GRAY_PALETTE : RGB_PALETTE;
+    const algo = ditherAlgoInput.value;
+    const spaceChar = spacingInput.value === 'spaced' ? ' ' : '';
+
+    // Work on float buffer for error diffusion
+    const buf = new Float32Array(width * height * 3);
+    for (let i = 0; i < width * height; i++) {
+      let r = imgData.data[i * 4];
+      let g = imgData.data[i * 4 + 1];
+      let b = imgData.data[i * 4 + 2];
+      if (isGray) {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = g = b = lum;
+      }
+      buf[i * 3] = r;
+      buf[i * 3 + 1] = g;
+      buf[i * 3 + 2] = b;
+    }
+
+    const digitsGrid = [];
+    const ditheredData = ctxOrig.createImageData(width, height);
+
+    for (let y = 0; y < height; y++) {
+      const rowDigits = [];
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 3;
+        let r = buf[idx];
+        let g = buf[idx + 1];
+        let b = buf[idx + 2];
+
+        if (algo === 'bayer') {
+          const threshold = (BAYER_4X4[y % 4][x % 4] - 0.5) * 64;
+          r = Math.min(255, Math.max(0, r + threshold));
+          g = Math.min(255, Math.max(0, g + threshold));
+          b = Math.min(255, Math.max(0, b + threshold));
+        }
+
+        const colorIdx = findClosestIndex(r, g, b, palette);
+        rowDigits.push(colorIdx);
+
+        const chosen = palette[colorIdx];
+        const outIdx = (y * width + x) * 4;
+        ditheredData.data[outIdx] = chosen[0];
+        ditheredData.data[outIdx + 1] = chosen[1];
+        ditheredData.data[outIdx + 2] = chosen[2];
+        ditheredData.data[outIdx + 3] = 255;
+
+        if (algo === 'floyd') {
+          const errR = r - chosen[0];
+          const errG = g - chosen[1];
+          const errB = b - chosen[2];
+
+          const distribute = (dx, dy, factor) => {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              const nIdx = (ny * width + nx) * 3;
+              buf[nIdx] += errR * factor;
+              buf[nIdx + 1] += errG * factor;
+              buf[nIdx + 2] += errB * factor;
+            }
+          };
+
+          distribute(1, 0, 7 / 16);
+          distribute(-1, 1, 3 / 16);
+          distribute(0, 1, 5 / 16);
+          distribute(1, 1, 1 / 16);
+        }
+      }
+      digitsGrid.push(rowDigits.join(spaceChar));
+    }
+
+    const ctxDith = canvasDithered.getContext('2d');
+    ctxDith.putImageData(ditheredData, 0, 0);
+
+    digitsTextResult = digitsGrid.join('\n');
+    outputTxt.value = digitsTextResult;
+    downloadBtn.disabled = false;
+  }
+
+  function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      loadedImg = new Image();
+      loadedImg.onload = processImage;
+      loadedImg.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+  document.getElementById('dropzone').addEventListener('dragover', (e) => e.preventDefault());
+  document.getElementById('dropzone').addEventListener('drop', (e) => {
+    e.preventDefault();
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  [maxWidthInput, paletteTypeInput, ditherAlgoInput, spacingInput].forEach(el => {
+    el.addEventListener('change', processImage);
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    if (!digitsTextResult) return;
+    const blob = new Blob([digitsTextResult], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dithered_3bit_digits.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+
+</body>
+</html>

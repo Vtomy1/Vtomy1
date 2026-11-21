@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NES 2A03 Waveform Synthesizer</title>
+  <style>
+    :root {
+      --nes-dark: #121216;
+      --nes-body: #cfcfd1;
+      --nes-body-shadow: #9e9ea2;
+      --nes-red: #d12229;
+      --nes-dark-gray: #2e2f33;
+      --nes-crt: #0d1a0d;
+      --nes-crt-glow: #38ef7d;
+      --nes-text: #eaeaea;
+      --key-white: #fafafa;
+      --key-black: #1f1f23;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px 12px;
+      min-height: 100vh;
+      background: radial-gradient(circle at center, #24252c 0%, #101014 100%);
+      font-family: "Courier New", Courier, monospace;
+      color: var(--nes-text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .synth-container {
+      width: 100%;
+      max-width: 820px;
+      background: linear-gradient(180deg, var(--nes-body) 0%, var(--nes-body-shadow) 100%);
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+      border: 4px solid #1c1c1f;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* Header styling */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--nes-dark-gray);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    .brand-title {
+      font-weight: 900;
+      font-size: 20px;
+      letter-spacing: 2px;
+      color: var(--nes-dark-gray);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-badge {
+      background: var(--nes-red);
+      color: white;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Screen and Controls Grid */
+    .top-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 680px) {
+      .top-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Oscilloscope Screen */
+    .scope-box {
+      background: var(--nes-crt);
+      border-radius: 8px;
+      border: 3px solid #1a1a1f;
+      box-shadow: inset 0 0 16px rgba(0, 255, 128, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scope-box::after {
+      content: " ";
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+
+    canvas {
+      width: 100%;
+      height: 140px;
+      display: block;
+    }
+
+    .scope-label {
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: #38ef7d;
+      align-self: flex-start;
+      margin-bottom: 4px;
+    }
+
+    /* Control Panel */
+    .controls-box {
+      background: var(--nes-dark-gray);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .channel-select {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .channel-btn {
+      background: #404147;
+      color: #fff;
+      border: 2px solid #232326;
+      border-radius: 4px;
+      padding: 8px 4px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .channel-btn.active {
+      background: var(--nes-red);
+      border-color: #ff5252;
+      box-shadow: 0 0 10px rgba(209, 34, 41, 0.6);
+    }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .param-label {
+      color: #ccc;
+      font-weight: bold;
+    }
+
+    .duty-selector {
+      display: flex;
+      gap: 4px;
+    }
+
+    .duty-btn {
+      background: #1f1f22;
+      color: #bbb;
+      border: 1px solid #4a4a50;
+      padding: 4px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .duty-btn.active {
+      background: #00e676;
+      color: #111;
+      font-weight: bold;
+    }
+
+    .sfx-bar {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .sfx-btn {
+      flex: 1;
+      background: #1b1c20;
+      border: 1px solid #3d3e44;
+      color: #ffca28;
+      border-radius: 4px;
+      padding: 6px 2px;
+      font-size: 10px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: bold;
+      transition: background 0.1s;
+    }
+
+    .sfx-btn:active {
+      background: #ffca28;
+      color: #111;
+    }
+
+    /* Piano Keyboard */
+    .keyboard-wrapper {
+      position: relative;
+      background: #1e1e22;
+      border-radius: 8px;
+      padding: 10px;
+      border: 3px solid #111;
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+      overflow-x: auto;
+    }
+
+    .keyboard {
+      display: flex;
+      position: relative;
+      height: 180px;
+      min-width: 600px;
+    }
+
+    .key {
+      position: relative;
+      cursor: pointer;
+      border-radius: 0 0 4px 4px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 10px;
+      font-size: 11px;
+      font-weight: bold;
+      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .key.white {
+      flex: 1;
+      background: linear-gradient(180deg, #fff 0%, #ebebeb 100%);
+      color: #555;
+      border: 1px solid #ccc;
+      z-index: 1;
+      height: 100%;
+    }
+
+    .key.white.active {
+      background: #ffd54f;
+      color: #111;
+      transform: translateY(2px);
+    }
+
+    .key.black {
+      position: absolute;
+      width: 4.8%;
+      height: 60%;
+      background: linear-gradient(180deg, #2b2b2e 0%, #111 100%);
+      color: #eee;
+      z-index: 2;
+      border-radius: 0 0 3px 3px;
+      border: 1px solid #000;
+      box-shadow: 2px 3px 5px rgba(0, 0, 0, 0.5);
+    }
+
+    .key.black.active {
+      background: var(--nes-red);
+      box-shadow: 0 0 10px rgba(209, 34, 41, 0.8);
+      transform: translateY(2px);
+    }
+
+    .sub-note {
+      font-size: 8px;
+      opacity: 0.6;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .footer-hints {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 11px;
+      color: #2b2c30;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="synth-container">
+    <div class="header-bar">
+      <div class="brand-title">
+        <span>FAMICOM 2A03</span>
+        <span class="brand-badge">CHIPTUNE SYNTH</span>
+      </div>
+      <div style="font-size: 12px; color: #444; font-weight: bold;">
+        OCTAVE: <span id="octaveDisplay">3 & 4</span>
+      </div>
+    </div>
+
+    <div class="top-panel">
+      <!-- Oscilloscope -->
+      <div class="scope-box">
+        <div class="scope-label">REAL-TIME APU PHOSPHOR OUTPUT</div>
+        <canvas id="scopeCanvas" width="380" height="140"></canvas>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls-box">
+        <!-- Channel Select -->
+        <div class="channel-select">
+          <button class="channel-btn active" data-chan="pulse1">PULSE 1</button>
+          <button class="channel-btn" data-chan="pulse2">PULSE 2</button>
+          <button class="channel-btn" data-chan="triangle">TRIANGLE</button>
+          <button class="channel-btn" data-chan="noise">NOISE</button>
+        </div>
+
+        <!-- Duty Cycle for Pulse -->
+        <div class="param-row" id="dutyRow">
+          <span class="param-label">PULSE DUTY:</span>
+          <div class="duty-selector">
+            <button class="duty-btn" data-duty="0.125">12.5%</button>
+            <button class="duty-btn" data-duty="0.25">25%</button>
+            <button class="duty-btn active" data-duty="0.5">50%</button>
+            <button class="duty-btn" data-duty="0.75">75%</button>
+          </div>
+        </div>
+
+        <!-- Arp & Decay -->
+        <div class="param-row">
+          <span class="param-label">FAST ARPEGGIO:</span>
+          <div>
+            <button class="duty-btn active" id="arpOffBtn">OFF</button>
+            <button class="duty-btn" id="arpMajBtn">MAJ</button>
+            <button class="duty-btn" id="arpMinBtn">MIN</button>
+          </div>
+        </div>
+
+        <!-- Classic Sound Effects -->
+        <div>
+          <span class="param-label" style="font-size: 11px;">RETRO SFX PRESETS:</span>
+          <div class="sfx-bar">
+            <button class="sfx-btn" id="sfxCoin">🪙 COIN</button>
+            <button class="sfx-btn" id="sfxJump">🍄 JUMP</button>
+            <button class="sfx-btn" id="sfxZap">⚡ LASER</button>
+            <button class="sfx-btn" id="sfxBoom">💣 BOOM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Musical Keyboard -->
+    <div class="keyboard-wrapper">
+      <div class="keyboard" id="piano">
+        <!-- White keys -->
+        <div class="key white" data-note="C3" data-key="a">C3<span class="sub-note">A</span></div>
+        <div class="key white" data-note="D3" data-key="s">D3<span class="sub-note">S</span></div>
+        <div class="key white" data-note="E3" data-key="d">E3<span class="sub-note">D</span></div>
+        <div class="key white" data-note="F3" data-key="f">F3<span class="sub-note">F</span></div>
+        <div class="key white" data-note="G3" data-key="g">G3<span class="sub-note">G</span></div>
+        <div class="key white" data-note="A3" data-key="h">A3<span class="sub-note">H</span></div>
+        <div class="key white" data-note="B3" data-key="j">B3<span class="sub-note">J</span></div>
+
+        <div class="key white" data-note="C4" data-key="k">C4<span class="sub-note">K</span></div>
+        <div class="key white" data-note="D4" data-key="l">D4<span class="sub-note">L</span></div>
+        <div class="key white" data-note="E4" data-key=";">E4<span class="sub-note">;</span></div>
+        <div class="key white" data-note="F4" data-key="'">F4<span class="sub-note">'</span></div>
+
+        <!-- Black keys -->
+        <div class="key black" style="left: 5.2%;" data-note="C#3" data-key="w">C#<span class="sub-note">W</span></div>
+        <div class="key black" style="left: 14.2%;" data-note="D#3" data-key="e">D#<span class="sub-note">E</span></div>
+        <div class="key black" style="left: 32.5%;" data-note="F#3" data-key="t">F#<span class="sub-note">T</span></div>
+        <div class="key black" style="left: 41.5%;" data-note="G#3" data-key="y">G#<span class="sub-note">Y</span></div>
+        <div class="key black" style="left: 50.8%;" data-note="A#3" data-key="u">A#<span class="sub-note">U</span></div>
+
+        <div class="key black" style="left: 69.2%;" data-note="C#4" data-key="o">C#<span class="sub-note">O</span></div>
+        <div class="key black" style="left: 78.2%;" data-note="D#4" data-key="p">D#<span class="sub-note">P</span></div>
+      </div>
+    </div>
+
+    <div class="footer-hints">
+      <span>Play with Mouse or QWERTY keys [A to '], Sharps on [W, E, T, Y, U, O, P]</span>
+      <span>NES APU Spec: 2A03 1.79MHz</span>
+    </div>
+  </div>
+
+  <script>
+    // Audio Context setup
+    let audioCtx = null;
+    let masterGain = null;
+    let analyser = null;
+
+    // Active state
+    let activeChannel = "pulse1";
+    let pulseDuty = 0.5;
+    let arpMode = "off"; // "off", "maj", "min"
+    const activeVoices = new Map();
+
+    // Frequency table for notes
+    const NOTE_FREQS = {
+      "C3": 130.81, "C#3": 138.59, "D3": 146.83, "D#3": 155.56,
+      "E3": 164.81, "F3": 174.61, "F#3": 185.00, "G3": 196.00,
+      "G#3": 207.65, "A3": 220.00, "A#3": 233.08, "B3": 246.94,
+      "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13,
+      "E4": 329.63, "F4": 349.23
+    };
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+        masterGain.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        drawScope();
+      }
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+    }
+
+    // NES Fourier-series Pulse Wave Generator for exact duty cycles (12.5%, 25%, 50%, 75%)
+    function createPulseWave(duty) {
+      const harmonics = 64;
+      const real = new Float32Array(harmonics);
+      const imag = new Float32Array(harmonics);
+      for (let n = 1; n < harmonics; n++) {
+        // Fourier series expansion for duty cycle D
+        imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
+      }
+      return audioCtx.createPeriodicWave(real, imag, { disableNormalization: false });
+    }
+
+    // NES Authentic 32-step stepped triangle wave (4-bit DAC quantized)
+    function createSteppedTriangleWave() {
+      const steps = [
+        15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+      ];
+      const N = steps.length;
+      const real = new Float32Array(32);
+      const imag = new Float32Array(32);
+      for (let k = 1; k < 32; k++) {
+        let re = 0, im = 0;
+        for (let n = 0; n < N; n++) {
+          const norm = (steps[n] - 7.5) / 7.5;
+          const angle = (2 * Math.PI * k * n) / N;
+          re += norm * Math.cos(angle);
+          im -= norm * Math.sin(angle);
+        }
+        real[k] = re / N;
+        imag[k] = -im / N;
+      }
+      return audioCtx.createPeriodicWave(real, imag, { disableNormalization: false });
+    }
+
+    // NES 15-bit LFSR pseudo-random noise generator
+    function createNoiseBuffer() {
+      const sampleRate = audioCtx.sampleRate;
+      const length = sampleRate * 1.5;
+      const buffer = audioCtx.createBuffer(1, length, sampleRate);
+      const data = buffer.getChannelData(0);
+      let reg = 1;
+      for (let i = 0; i < length; i++) {
+        // NES mode 0 LFSR: XOR bit 0 and bit 1
+        const feedback = (reg & 1) ^ ((reg >> 1) & 1);
+        reg = (reg >> 1) | (feedback << 14);
+        data[i] = (reg & 1) ? 0.8 : -0.8;
+      }
+      return buffer;
+    }
+
+    // Note Playback
+    function startNote(note) {
+      initAudio();
+      if (activeVoices.has(note)) return;
+
+      const baseFreq = NOTE_FREQS[note];
+      if (!baseFreq) return;
+
+      const now = audioCtx.currentTime;
+      const voiceGain = audioCtx.createGain();
+      voiceGain.gain.setValueAtTime(0.001, now);
+      voiceGain.gain.linearRampToValueAtTime(0.3, now + 0.01); // Quick NES attack
+
+      let node;
+      let arpInterval = null;
+
+      if (activeChannel === "pulse1" || activeChannel === "pulse2") {
+        node = audioCtx.createOscillator();
+        node.setPeriodicWave(createPulseWave(pulseDuty));
+        node.frequency.setValueAtTime(baseFreq, now);
+        node.connect(voiceGain);
+        node.start(now);
+
+        // Classic NES fast arpeggiator chord simulation (50Hz / 60Hz tick)
+        if (arpMode !== "off") {
+          const offsets = arpMode === "maj" ? [0, 4, 7] : [0, 3, 7];
+          let step = 0;
+          arpInterval = setInterval(() => {
+            step = (step + 1) % offsets.length;
+            const semi = offsets[step];
+            const arpFreq = baseFreq * Math.pow(2, semi / 12);
+            node.frequency.setValueAtTime(arpFreq, audioCtx.currentTime);
+          }, 45);
+        }
+      } else if (activeChannel === "triangle") {
+        node = audioCtx.createOscillator();
+        node.setPeriodicWave(createSteppedTriangleWave());
+        node.frequency.setValueAtTime(baseFreq / 2, now); // NES triangle plays 1 octave lower (bass)
+        node.connect(voiceGain);
+        node.start(now);
+      } else if (activeChannel === "noise") {
+        node = audioCtx.createBufferSource();
+        node.buffer = createNoiseBuffer();
+        node.loop = true;
+        // Frequency shifts the playback rate for pitch quantization
+        node.playbackRate.setValueAtTime(baseFreq / 200, now);
+        node.connect(voiceGain);
+        node.start(now);
+      }
+
+      voiceGain.connect(masterGain);
+      activeVoices.set(note, { node, voiceGain, arpInterval });
+
+      // Visual feedback
+      const keyEl = document.querySelector(`.key[data-note="${note}"]`);
+      if (keyEl) keyEl.classList.add("active");
+    }
+
+    function stopNote(note) {
+      if (!activeVoices.has(note)) return;
+      const { node, voiceGain, arpInterval } = activeVoices.get(note);
+      const now = audioCtx.currentTime;
+
+      if (arpInterval) clearInterval(arpInterval);
+
+      // Fast vintage release
+      voiceGain.gain.linearRampToValueAtTime(0.0001, now + 0.05);
+      setTimeout(() => {
+        try { node.stop(); } catch(e) {}
+        try { node.disconnect(); voiceGain.disconnect(); } catch(e) {}
+      }, 60);
+
+      activeVoices.delete(note);
+
+      const keyEl = document.querySelector(`.key[data-note="${note}"]`);
+      if (keyEl) keyEl.classList.remove("active");
+    }
+
+    // Classic Sound Effect synthesis
+    function playCoinSFX() {
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.setPeriodicWave(createPulseWave(0.5));
+
+      osc.frequency.setValueAtTime(987.77, now); // B5
+      osc.frequency.setValueAtTime(1318.51, now + 0.08); // E6
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.setValueAtTime(0.25, now + 0.35);
+      gain.gain.linearRampToValueAtTime(0.001, now + 0.5);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    }
+
+    function playJumpSFX() {
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.setPeriodicWave(createSteppedTriangleWave());
+
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(600, now + 0.18);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    }
+
+    function playZapSFX() {
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.setPeriodicWave(createPulseWave(0.125));
+
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.16);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.linearRampToValueAtTime(0.001, now + 0.18);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    }
+
+    function playBoomSFX() {
+      initAudio();
+      const now = audioCtx.currentTime;
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = createNoiseBuffer();
+      const gain = audioCtx.createGain();
+
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      noise.connect(gain);
+      gain.connect(masterGain);
+      noise.start(now);
+      noise.stop(now + 0.46);
+    }
+
+    // Oscilloscope renderer
+    function drawScope() {
+      requestAnimationFrame(drawScope);
+      if (!analyser) return;
+
+      const canvas = document.getElementById("scopeCanvas");
+      const ctx = canvas.getContext("2d");
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      analyser.getByteTimeDomainData(dataArray);
+
+      ctx.fillStyle = "#0a130a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#38ef7d";
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = "#38ef7d";
+
+      ctx.beginPath();
+      const sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * canvas.height) / 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+    }
+
+    // UI Event Listeners
+    document.querySelectorAll(".channel-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".channel-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeChannel = btn.dataset.chan;
+        document.getElementById("dutyRow").style.display =
+          activeChannel.startsWith("pulse") ? "flex" : "none";
+      });
+    });
+
+    document.querySelectorAll(".duty-btn[data-duty]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".duty-btn[data-duty]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        pulseDuty = parseFloat(btn.dataset.duty);
+      });
+    });
+
+    // Arp buttons
+    document.getElementById("arpOffBtn").onclick = () => setArp("off", "arpOffBtn");
+    document.getElementById("arpMajBtn").onclick = () => setArp("maj", "arpMajBtn");
+    document.getElementById("arpMinBtn").onclick = () => setArp("min", "arpMinBtn");
+
+    function setArp(mode, id) {
+      arpMode = mode;
+      ["arpOffBtn", "arpMajBtn", "arpMinBtn"].forEach(btnId => {
+        document.getElementById(btnId).classList.toggle("active", btnId === id);
+      });
+    }
+
+    // SFX buttons
+    document.getElementById("sfxCoin").onclick = playCoinSFX;
+    document.getElementById("sfxJump").onclick = playJumpSFX;
+    document.getElementById("sfxZap").onclick = playZapSFX;
+    document.getElementById("sfxBoom").onclick = playBoomSFX;
+
+    // Mouse & Touch Keyboard triggers
+    const piano = document.getElementById("piano");
+    piano.addEventListener("mousedown", (e) => {
+      const key = e.target.closest(".key");
+      if (key) startNote(key.dataset.note);
+    });
+    window.addEventListener("mouseup", () => {
+      activeVoices.forEach((_, note) => stopNote(note));
+    });
+
+    // Keyboard Hotkey Mapping
+    const KEY_MAP = {
+      a: "C3", w: "C#3", s: "D3", e: "D#3", d: "E3", f: "F3", t: "F#3",
+      g: "G3", y: "G#3", h: "A3", u: "A#3", j: "B3", k: "C4", o: "C#4",
+      l: "D4", p: "D#4", ";": "E4", "'": "F4"
+    };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+      const note = KEY_MAP[e.key.toLowerCase()];
+      if (note) startNote(note);
+    });
+
+    window.addEventListener("keyup", (e) => {
+      const note = KEY_MAP[e.key.toLowerCase()];
+      if (note) stopNote(note);
+    });
+  </script>
+</body>
+</html>
